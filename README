@@ -1,0 +1,7 @@
+the idea is to have a gateway which can do k/v storage again
+a framework for handler plugins.
+
+the initial goal is to get a gateway which speaks memcache
+and does memory based k/v storage in which things being pushed
+out the back are stored to disk and lookups which don't hit in
+the memory pool read from the disk
