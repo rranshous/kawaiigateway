@@ -1,3 +1,4 @@
-from memory_store import MemcachedMemoryStore
+from memory_store import MemoryMemcachedPlugin
+from disk_store import DiskMemcachedPlugin
 
-plugins = [MemcachedMemoryStore]
+plugins = [MemoryMemcachedPlugin,DiskMemcachedPlugin]

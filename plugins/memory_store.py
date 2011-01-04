@@ -4,48 +4,19 @@ from base import Plugin
 # ty to github.com/superisaac/redqueue
 ####################################
 
-# we are going to do simple k/v storage in the memory pool
-class MemcachedMemoryStore(Plugin):
-    def __init__(self):
-        self.steram = None
-        self.protocol_id = str(id(self))
-        self.used_keys = set()
+from memcached_plugin import MemcachedPlugin
 
-    def handle_set(self, key, flags, exptime, bytes, *args):
-        bytes = int(bytes)
-        exptime = int(exptime)
-        if exptime > 0:
-            exptime = time.time() + exptime
-        def on_set_data(stream,line,response,memory_store):
-            data = line[:-2] # the last two chars are returns
-            memory_store[key] = data
-            response.append('STORED')
-        self.memory_store[key] = None
-        return on_set_data
+# we are going to do simple k/v storage in the memory pool
+class MemoryMemcachedPlugin(MemcachedPlugin):
+    memory_store = {}
+
+    def _set_data(self, key, value):
+        self.memory_store[key] = value
+        return True
 
     def _get_data(self, key):
-        return self.memory_store.get(key)
+        return cls.memory_store.get(key)
 
-    def handle_get(self, *keys):
-        for key in keys:
-            data  = self._get_data(key)
-            if data:
-                self.write('VALUE %s 0 %d\r\n%s\r\n'
-                                  % (key,len(data), data))
-        self.write('END\r\n')
-
-    def handle_gets(self, *keys):
-        for key in keys:
-            data = self._get_data(key)
-            if data:
-                self.write('VALUE %s 0 %d\r\n%s\r\n'
-                                  % (key, len(data), data))
-                break
-        self.write('END\r\n')
-
-    def handle_delete(self, key, *args):
-        if key in self.used_keys:
-            self.write('DLETED\r\n')
-            self.used_keys.remove(key)
-        else:
-            self.write('NOT_DELETED\r\n')
+    def _delete_data(self, key):
+        del self.memory_store[key]
+        return True

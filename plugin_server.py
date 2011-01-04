@@ -4,14 +4,11 @@ from tornado import ioloop
 from tornado import iostream
 
 class PluginServer(object):
-    def __init__(self,plugins,memory_store):
+    def __init__(self,plugins):
         logging.debug('plugin server init')
 
         # plugins is a list of objects w/ a callable handle
         self.plugins = plugins
-
-        # memory store shared between all connections
-        self.memory_store = memory_store
 
     def handle_accept(self, fd, events):
         logging.debug('plugin server handling accept')
@@ -39,10 +36,9 @@ class PluginServer(object):
             logging.debug('no handlers, using plugins')
             handlers = [getattr(p,'handle') for p in plugins]
 
-        memory_store = self.memory_store
         def handle_read(line):
             logging.debug('handling read: %s' % line)
-            # pass our stream, line, memory store, and response
+            # pass our stream, line, and response
             # to each of the plugin handles
             response = []
             callables = []
@@ -51,7 +47,7 @@ class PluginServer(object):
                 # than we should wait on the stream for the next
                 # line and pass it to the callable
                 logging.debug('calling func: %s' % func.__name__)
-                r = func(stream,line,response,memory_store)
+                r = func(stream,line,response)
                 logging.debug('response: %s' % response)
                 if callable(r):
                     callables.append(r)

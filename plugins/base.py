@@ -16,12 +16,11 @@ class Plugin(object):
     def __init__(self):
         pass
 
-    def handle(self,stream,line,response,memory_store):
+    def handle(self,stream,line,response):
 
         self.stream = stream
         self.line = line
         self.response = response
-        self.memory_store = memory_store
 
         # simple default handler which will break
         # the string down into <action> arg arg arg ..
@@ -47,3 +46,8 @@ class Plugin(object):
     # writes a new line to the response list
     def write_line(self,data):
         self.response.append(data)
+
+    # writes a line if it's not already in the response
+    def write_distinct_line(self,data):
+        if data not in self.response:
+            self.write_line(data)

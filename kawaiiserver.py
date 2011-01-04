@@ -20,10 +20,6 @@ define('port', default=11211, type=int, help='The port to be listened')
 
 def main():
 
-    # parse the command line
-    print 'parsing'
-    tornado.options.parse_command_line()
-    logging.debug('parsing cmd line')
 
     # we need to give our plugins a chance
     # to define cmdline options
@@ -33,6 +29,11 @@ def main():
             logging.debug('defining cmdline arg: %s %s %s'
                           % (plugin,args,kwargs))
             define(*args,**kwargs)
+
+    # parse the command line
+    print 'parsing'
+    tornado.options.parse_command_line()
+    logging.debug('parsing cmd line')
 
     # initialize the plugins
     # init the plugins passing them (as named args)
@@ -47,8 +48,7 @@ def main():
         active_plugins.append(plugin(**kwargs))
 
     # start up our server
-    memory_store = {}
-    server = Server(active_plugins,memory_store)
+    server = Server(active_plugins)
     server.start(options.host, options.port)
     ioloop.IOLoop.instance().start()
 
