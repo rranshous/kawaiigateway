@@ -1,3 +1,3 @@
-from memory_store import MemoryStore
+from memory_store import MemcachedMemoryStore
 
-plugins = [MemoryStore]
+plugins = [MemcachedMemoryStore]
