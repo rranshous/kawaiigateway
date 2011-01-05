@@ -1,4 +1,5 @@
 from base import Plugin
+import logging
 
 ####################################
 # ty to github.com/superisaac/redqueue
@@ -40,6 +41,12 @@ class MemcachedPlugin(Plugin):
 
     def handle_get(self, *keys):
         for key in keys:
+            # since another plugin could have already
+            # supplied the value lets check
+            if len([x for x in self.response
+                               if x.startswith('VALUE %s' % key)]) > 0:
+                logging.debug('skipping value response')
+                continue
             if self._is_key_set(key):
                 data  = self._get_data(key)
                 if data:

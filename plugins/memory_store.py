@@ -1,9 +1,4 @@
 from base import Plugin
-
-####################################
-# ty to github.com/superisaac/redqueue
-####################################
-
 from memcached_plugin import MemcachedPlugin
 
 # we are going to do simple k/v storage in the memory pool
