@@ -47,7 +47,9 @@ class Plugin(object):
     def write_line(self,data):
         self.response.append(data)
 
-    # writes a line if it's not already in the response
+    # if the given line is already in the response
+    # remove it before appending the line
     def write_distinct_line(self,data):
-        if data not in self.response:
-            self.write_line(data)
+        if data in self.response:
+            self.response.remove(data)
+        self.write_line(data)

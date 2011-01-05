@@ -15,7 +15,7 @@ class MemoryMemcachedPlugin(MemcachedPlugin):
         return True
 
     def _get_data(self, key):
-        return cls.memory_store.get(key)
+        return self.memory_store.get(key)
 
     def _delete_data(self, key):
         del self.memory_store[key]
