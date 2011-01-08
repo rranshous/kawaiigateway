@@ -10,7 +10,7 @@ class Plugin(object):
     # for the tornado define method for cmdline options
     # ex: = [((,),{}),..]
     # these will get passed to the object when it is initialized
-    cmdline_options = []
+    # cmdline_options = []
 
     # init expects kwargs for each of the cmdline options
     def __init__(self):

@@ -24,14 +24,17 @@ class MemoryStore(object):
     ]
     def __init__(self,memory_limit=None):
 
-        # sum of value sizes
+        # sum of value sizes, bytes
         self.memory_usage = 0.0
 
         # lookup of the len of the values in memory
         self.value_sizes = LoggingDict()
 
-        # limit of memory pool values in MB
-        self.memory_limit = memory_limit or -1
+        # limit of memory pool values. passed in as MB
+        # but stored as bytes to compare against the usage
+        self.memory_limit = memory_limit * 1048576 if memory_limit else -1
+        if self.memory_limit != -1:
+            logging.debug('memory_limit: %s' % self.memory_limit)
 
     def cull_pool(self):
         """ if we are over the memory limit remove
