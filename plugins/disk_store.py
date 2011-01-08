@@ -33,7 +33,7 @@ class DiskMemcachedPlugin(MemcachedPlugin):
                       % (self.storage_root,key,len(value or '')))
         blip = Blip(self.storage_root,key=key)
         if value:
-            blip.value = value
+            blip.set_value(value)
         return blip
 
     def _is_key_set(self, key):

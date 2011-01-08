@@ -53,10 +53,10 @@ class MemoryStore(object):
             removed = []
             while self.memory_usage > memory_limit:
                 oldest_key = self.value_sizes.key_list[0]
-                # remove the key from the memory store
-                del self.memory_store[oldest_key]
                 # remove it's size from the memory usage
                 self.memory_usage -= self.value_sizes.get(oldest_key)
+                # remove the key from the memory store
+                del self.memory_store[oldest_key]
                 # now remove it from the value sizes
                 del self.value_sizes[oldest_key]
                 removed.append(oldest_key)
