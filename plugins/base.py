@@ -14,7 +14,9 @@ class Plugin(object):
 
     # init expects kwargs for each of the cmdline options
     def __init__(self):
-        pass
+        # the server will set the server attribute
+        # when the plugin is being used by a server
+        self.server = None
 
     def handle(self,stream,line,response):
 

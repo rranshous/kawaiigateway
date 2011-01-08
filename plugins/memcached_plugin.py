@@ -19,6 +19,7 @@ class MemcachedPlugin(Plugin):
         return key in self.used_keys
 
     def _set_data(self, key, value):
+        self._key_set(key)
         return True
 
     def handle_set(self, key, flags, exptime, bytes, *args):
@@ -33,7 +34,6 @@ class MemcachedPlugin(Plugin):
             set_data(key,data)
             if 'STORED' not in response:
                 response.append('STORED')
-        self._key_set(key)
         return on_set_data
 
     def _get_data(self, key):
@@ -56,13 +56,13 @@ class MemcachedPlugin(Plugin):
         self.write_distinct_line('END')
 
     def _delete_data(self, key):
+        self._key_deleted(key)
         return True
 
     def handle_delete(self, key, *args):
         if key in self.used_keys:
             self._delete_data(key)
             self.write_distinct_line('DELETED')
-            self._key_deleted(key)
         else:
             self.write_distinct_line('NOT_FOUND')
 

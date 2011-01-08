@@ -10,6 +10,10 @@ class PluginServer(object):
         # plugins is a list of objects w/ a callable handle
         self.plugins = plugins
 
+        # let the plugins know they are being used by a server
+        for plugin in self.plugins:
+            plugin.server = self
+
     def handle_accept(self, fd, events):
         logging.debug('plugin server handling accept')
         # we've got a new connection
