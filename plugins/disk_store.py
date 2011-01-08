@@ -13,15 +13,17 @@ class DiskMemcachedPlugin(MemcachedPlugin):
     ]
 
     def __init__(self,storage_root=None):
-        self.storage_root = storage_root
         super(DiskMemcachedPlugin,self).__init__()
+        self.storage_root = storage_root
 
-    def handle(self,*args,**kwargs):
+    def handle(self,stream,line,response):
         # if we don't know where my data is than don't do anything
         if self.storage_root:
-            return super(DiskMemcachedPlugin,self).handle(*args,**kwargs)
+            return super(DiskMemcachedPlugin,self).handle(stream,line,
+                                                          response)
         else:
             logging.debug('no storage root set')
+            response.append('END') # nothing to see here
 
         return True
 
