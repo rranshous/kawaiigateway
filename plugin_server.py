@@ -37,7 +37,7 @@ class PluginServer(object):
             handlers = [getattr(p,'handle') for p in plugins]
 
         def handle_read(line):
-            logging.debug('handling read: %s' % line)
+            logging.debug('handling read') #: %s' % line)
             # pass our stream, line, and response
             # to each of the plugin handles
             response = []
@@ -48,7 +48,7 @@ class PluginServer(object):
                 # line and pass it to the callable
                 logging.debug('calling func: %s' % func.__name__)
                 r = func(stream,line,response)
-                logging.debug('response: %s' % response)
+                logging.debug('response: %s' % len(response))
                 if callable(r):
                     callables.append(r)
 
