@@ -32,7 +32,7 @@ class DiskMemcachedPlugin(MemcachedPlugin):
         logging.debug('getting blip: %s %s %s'
                       % (self.storage_root,key,len(value or '')))
         blip = Blip(self.storage_root,key=key)
-        if value:
+        if value is not None:
             blip.set_value(value)
         return blip
 

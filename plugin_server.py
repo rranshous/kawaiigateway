@@ -24,13 +24,15 @@ class PluginServer(object):
         self.wait_for_line(stream,self.get_handle_read(stream,
                                                        self.plugins))
 
-    def wait_for_line(self,stream,func):
+    @classmethod
+    def wait_for_line(cls,stream,func):
         logging.debug('plugin server waiting for line')
 
         # read from the stream until we hit a new line
         stream.read_until('\r\n', func)
 
-    def get_handle_read(self,stream,plugins,handlers=[]):
+    @classmethod
+    def get_handle_read(cls,stream,plugins,handlers=[]):
         logging.debug('plugin server getting handle read:: handlers: %s'
                       % handlers)
 
@@ -64,9 +66,9 @@ class PluginServer(object):
 
             # wait for the next line
             logging.debug('callables: %s' % callables)
-            self.wait_for_line(stream,
-                               self.get_handle_read(stream,plugins,
-                                                    handlers=callables))
+            cls.wait_for_line(stream,
+                              cls.get_handle_read(stream,plugins,
+                                                  handlers=callables))
 
         return handle_read
 
