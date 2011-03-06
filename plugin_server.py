@@ -15,6 +15,10 @@ class PluginServer(Eventable):
         for plugin in self.plugins:
             plugin.server = self
 
+        # let the triggers know
+        for trigger in self.triggers:
+            trigger.server = self
+
     def handle_accept(self, fd, events):
         logging.debug('plugin server handling accept')
         # we've got a new connection

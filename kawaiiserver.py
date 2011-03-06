@@ -35,6 +35,14 @@ def main():
     tornado.options.parse_command_line()
     logging.debug('parsing cmd line')
 
+    # initialize our triggers
+    # triggers will react to events
+    active_triggers = []
+    logging.debug('initializing triggers')
+    for trigger in triggers.triggers:
+        # we are pushing the events through the server
+        active_triggers.append(trigger())
+
     # initialize the plugins
     # init the plugins passing them (as named args)
     # the result of their command line options
@@ -48,7 +56,7 @@ def main():
         active_plugins.append(plugin(**kwargs))
 
     # start up our server
-    server = Server(active_plugins)
+    server = Server(active_plugins,triggers)
     server.start(options.host, options.port)
     ioloop.IOLoop.instance().start()
 
