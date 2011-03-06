@@ -5,18 +5,25 @@ from tornado import iostream
 from bigsignal import Eventable
 
 class PluginServer(Eventable):
-    def __init__(self,plugins):
+    def __init__(self,plugins=[],triggers=[]):
+        super(PluginServer,self).__init__()
+
         logging.debug('plugin server init')
 
         # plugins is a list of objects w/ a callable handle
         self.plugins = plugins
+        
+        # triggers is a list of triggers
+        self.triggers = triggers
 
         # let the plugins know they are being used by a server
         for plugin in self.plugins:
+            logging.debug('setting server on: %s' % plugin.__class__)
             plugin.server = self
 
         # let the triggers know
         for trigger in self.triggers:
+            logging.debug('setting server on: %s:' % trigger.__class__)
             trigger.server = self
 
     def handle_accept(self, fd, events):
@@ -78,6 +85,9 @@ class PluginServer(Eventable):
         return handle_read
 
     def start(self, host, port):
+        # let those listening know we are about to begin
+        self.fire('server_before_start',self)
+
         logging.debug('plugin server starting')
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self._sock.setblocking(0)
@@ -87,4 +97,7 @@ class PluginServer(Eventable):
         ioloop.IOLoop.instance().add_handler(self._sock.fileno(),
                                              self.handle_accept,
                                              ioloop.IOLoop.READ)
+
+        # it has begun
+        self.fire('server_start',self)
 

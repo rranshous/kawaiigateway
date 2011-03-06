@@ -1,10 +1,14 @@
+"""
+we are going to store k/v to the disk
+"""
+
 from base import Plugin
 
-# we are going to store k/v to the disk
 from diskdb import SimpleBlip as Blip
 from memcached_plugin import MemcachedPlugin
 from memory_store import MemoryStore
 import logging
+from triggers import DiskBackFill
 
 class DiskMemcachedPlugin(MemcachedPlugin):
     cmdline_options = [
@@ -13,9 +17,25 @@ class DiskMemcachedPlugin(MemcachedPlugin):
           'help':"where disk memcache plugin should save it's data"})
     ]
 
+    def _set_server(self,server):
+        """
+        setup our trigger now that we have a server
+        """
+        self.__server = server
+        logging.debug('disk cache setting server on backfill trigger')
+        self.backfill_trigger.server = server
+
+    server = property(lambda s: s.__server,
+                      _set_server)
+
     def __init__(self,storage_root=None):
         super(DiskMemcachedPlugin,self).__init__()
         self.storage_root = storage_root
+
+        # if we can, lets add the back fill trigger
+        # so that the other memcached plugins can get
+        # to our persistant datas =]
+        self.backfill_trigger = DiskBackFill(self.storage_root)
 
     def handle(self,stream,line,response):
         # if we don't know where my data is than don't do anything

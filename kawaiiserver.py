@@ -13,6 +13,7 @@ from tornado import ioloop
 import tornado.options
 from tornado.options import define, options
 import plugins
+import triggers
 from plugin_server import PluginServer as Server
 
 define('host', default="0.0.0.0", help="The binded ip host")
@@ -56,7 +57,7 @@ def main():
         active_plugins.append(plugin(**kwargs))
 
     # start up our server
-    server = Server(active_plugins,triggers)
+    server = Server(active_plugins,active_triggers)
     server.start(options.host, options.port)
     ioloop.IOLoop.instance().start()
 

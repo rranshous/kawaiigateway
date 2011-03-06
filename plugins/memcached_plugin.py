@@ -19,6 +19,7 @@ class MemcachedPlugin(Plugin):
         return key in self.used_keys
 
     def _set_data(self, key, value):
+        logging.debug('setting data: %s %s' % (key,len(value)))
         self._key_set(key)
         return True
 
