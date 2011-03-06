@@ -29,11 +29,15 @@ class MemcachedPlugin(Plugin):
         if exptime > 0:
             exptime = time.time() + exptime
         set_data = self._set_data
+
+        server = self.server
         def on_set_data(stream,line,response):
             data = line[:-2] # the last two chars are returns
             set_data(key,data)
             if 'STORED' not in response:
                 response.append('STORED')
+            server.fire('memcached_set',key,data)
+            
         return on_set_data
 
     def _get_data(self, key):
@@ -53,6 +57,7 @@ class MemcachedPlugin(Plugin):
                     self.write_distinct_line('VALUE %s 0 %d'
                                              % (key,len(data)))
                     self.write_distinct_line(data)
+                self.server.fire('memecached_get',key,data)
         self.write_distinct_line('END')
 
     def _delete_data(self, key):
@@ -61,8 +66,11 @@ class MemcachedPlugin(Plugin):
 
     def handle_delete(self, key, *args):
         if key in self.used_keys:
+            data = self._get_data(key)
             self._delete_data(key)
             self.write_distinct_line('DELETED')
         else:
             self.write_distinct_line('NOT_FOUND')
+
+        self.server.fire('memcached_delete',key,data)
 

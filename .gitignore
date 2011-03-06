@@ -1,3 +1,5 @@
 *.swp
 *.pyc
 /tmp/
+/data_cache/
+

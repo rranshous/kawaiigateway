@@ -1,3 +1,6 @@
 [submodule "diskdb"]
 	path = diskdb
 	url = git@github.com:rranshous/diskdb.git
+[submodule "bigsignal"]
+	path = bigsignal
+	url = git@github.com:rranshous/bigsignal.git

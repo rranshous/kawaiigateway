@@ -2,8 +2,9 @@ import logging
 import socket
 from tornado import ioloop
 from tornado import iostream
+from bigsignal import Eventable
 
-class PluginServer(object):
+class PluginServer(Eventable):
     def __init__(self,plugins):
         logging.debug('plugin server init')
 
