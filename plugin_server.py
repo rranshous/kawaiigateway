@@ -36,8 +36,8 @@ class PluginServer(Eventable):
         self.wait_for_line(stream,self.get_handle_read(stream,
                                                        self.plugins))
 
-    @classmethod
-    def wait_for_line(cls,stream,func):
+    @staticmethod
+    def wait_for_line(stream,func):
         logging.debug('plugin server waiting for line')
 
         # read from the stream until we hit a new line
