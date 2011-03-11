@@ -21,6 +21,7 @@ class DiskBackFill(Trigger):
 
     def __init__(self,data_root):
         self.data_root = data_root
+        assert self.data_root, 'must provide storage root'
         super(DiskBackFill,self).__init__()
 
     def backfill(self,*args,**kwargs):
