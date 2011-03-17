@@ -10,6 +10,10 @@ class PluginServer(Eventable):
 
         logging.debug('plugin server init')
 
+        # who we serving?
+        self.host = None
+        self.port = None
+
         # plugins is a list of objects w/ a callable handle
         self.plugins = plugins
         
@@ -97,6 +101,9 @@ class PluginServer(Eventable):
         ioloop.IOLoop.instance().add_handler(self._sock.fileno(),
                                              self.handle_accept,
                                              ioloop.IOLoop.READ)
+
+        self.host = host
+        self.port = port
 
         # it has begun
         self.fire('server_start',self)

@@ -75,3 +75,29 @@ class MemcachedPlugin(Plugin):
 
         self.server.fire('memcached_delete',key,data)
 
+    
+    # these are functions which will help
+    # with setting / getting data w/o going
+    # through the server
+    def get_underhanded(self,key):
+        """ will search through the memcache
+            plugins looking for the value """
+        for plugin in self.server.plugins:
+            if isintance(plugin,MemcachedPlugin):
+                v = plugin._get_data(key)
+                if v:
+                    return v
+        return None
+
+
+    # this property will return back a new client
+    # for the running server
+    # TODO: not have to use real sockets?
+    def _get_server_client(self):
+        host = self.server.host
+        port = self.server.port
+        # shit, this is probably going to block, killing the server
+        c = memcache.Client(['%s:%s' % (host,port)])
+        return c
+
+    server_client = property(get_server_client)
