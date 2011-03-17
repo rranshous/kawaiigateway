@@ -62,13 +62,19 @@ class QueuePlugin(MemcachedPlugin):
 
         return True
 
-    def delete_data(self, key):
+    def _delete_data(self, key):
         """
         will keep a message from being added back into the
         queue after it's timeout. is ignored if there is
         no timeout pending
         """
-        # 
+        
+        name, args = self.parse_key(key)
+
+        # the first arg should be the sha of the message
+        key = args[0]
+
+        # now delete that queue message if it's still around
 
     def _get_data(self, key):
         """ returns the next message.
@@ -100,6 +106,9 @@ class QueuePlugin(MemcachedPlugin):
         if timeout > -1:
             self.add_delete_watcher(key,m,timeout)
 
+        # now lets remove the message
+        self.delete_underhanded(key)
+
         # give back the message body
         return m
 
@@ -130,6 +139,22 @@ class QueuePlugin(MemcachedPlugin):
         deleted
         """
         # try to use tornadio loop
-        # moves the value from the given key to a key which is the same
-        # but has an additional arg at the end marking it deleted
-        pass
+        # to mark a message as removed from the message queue
+        # but not yet deleted we are going to move it from it's
+        # current key to NS/Qname/HASH
+        # HASH being the sha of the msg
+
+        message_hash = self._get_message_hash(m)
+        name, args = self.parse_key(key)
+
+        # create our new key
+        new_key = '%s/'%self.NS if self.NS else ''
+        new_key += '%s/%s' % (name,message_hash)
+
+        # add our message under it's new key
+        self.set_underhanded(new_key,m)
+
+        # TODO add task w/ timeout to IOloop
+
+        return True
+
