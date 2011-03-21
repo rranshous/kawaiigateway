@@ -6,6 +6,13 @@ from base import Plugin
 
 from memcached_plugin import MemcachedPlugin
 
+from tornado.ioloop import IOLoop
+import time
+
+# simple way of keeping message info
+Message = namedtuple('Message',['key','message','callback_token',
+                                'temporary_key'])
+
 class QueuePlugin(MemcachedPlugin):
     NS = 'queue'
     default_timeout = 60 # seconds
@@ -17,6 +24,12 @@ class QueuePlugin(MemcachedPlugin):
 
     to do a delete you do the same but
     """
+
+    def __init__(self,*args,**kwargs):
+        # our lookup for messages
+        # which have been pulled but not
+        # deleted
+        self.to_delete = {}
 
     def parse_key(self,k):
         """
@@ -72,9 +85,30 @@ class QueuePlugin(MemcachedPlugin):
         name, args = self.parse_key(key)
 
         # the first arg should be the sha of the message
-        key = args[0]
+        _hash = args[0]
 
         # now delete that queue message if it's still around
+        message_details = self.to_delete.get(_hash)
+
+        if not message_details:
+            return True
+
+        # grab our io loop
+        loop = IOLoop.instance()
+
+        # remove our re-add handler from the loop
+        try:
+            loop.remove_timeout(message_details.callback_token)
+        except ValueError:
+            pass # nothing to remove
+
+        # remove the temporary message
+        self.delete_underhanded(message_details.temporary_key)
+
+        # and we're good 
+        return True
+
+
 
     def _get_data(self, key):
         """ returns the next message.
@@ -132,6 +166,14 @@ class QueuePlugin(MemcachedPlugin):
         # return the full key path
         return NS_keys[numbers[0]]
 
+
+    def handle_not_deleted(self,_hash):
+        """
+        Uses the hash of the message to remove the message
+        from limbo and add it to the begiing of the queue
+        """
+        pass # TODO
+
     def add_delete_watcher(self,key,m,timeout):
         """
         adds a task to the loop to execute in +timeout seconds
@@ -154,7 +196,24 @@ class QueuePlugin(MemcachedPlugin):
         # add our message under it's new key
         self.set_underhanded(new_key,m)
 
-        # TODO add task w/ timeout to IOloop
+        # get the message hash, which is used
+        # to track the message while it's in limbo
+        _hash = self._get_sha(m)
 
+        # get the current loop instance
+        loop = IOLoop.instance()
+
+        # setup our callback
+        handle_not_deleted = self.handle_not_deleted
+        def callback():
+            handle_not_deleted(_hash)
+        
+        # add in our callback w/ the specified timeout
+        callback_token = loop.add_timeout(time.time()+timeout,callback)
+            
+        # we need to add this message to our to_delete lookup
+        self.to_delete[_hash] = Message(key,message,callback_token,new_key)
+
+        # add we're done!
         return True
 
