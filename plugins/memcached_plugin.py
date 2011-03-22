@@ -118,4 +118,4 @@ class MemcachedPlugin(Plugin):
         c = memcache.Client(['%s:%s' % (host,port)])
         return c
 
-    server_client = property(get_server_client)
+    server_client = property(_get_server_client)

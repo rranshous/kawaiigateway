@@ -9,6 +9,8 @@ from memcached_plugin import MemcachedPlugin
 from tornado.ioloop import IOLoop
 import time
 
+import logging
+
 # simple way of keeping message info
 Message = namedtuple('Message',['key','message','callback_token',
                                 'temporary_key'])
@@ -25,11 +27,17 @@ class QueuePlugin(MemcachedPlugin):
     to do a delete you do the same but
     """
 
-    def __init__(self,*args,**kwargs):
+    def __init__(self):
         # our lookup for messages
         # which have been pulled but not
         # deleted
         self.to_delete = {}
+        
+        # pay ur respects
+        super(QueuePlugin,self).__init__()
+
+    def _get_sha(self,s):
+        return sha.new(s).digest()
 
     def parse_key(self,k):
         """
@@ -61,6 +69,8 @@ class QueuePlugin(MemcachedPlugin):
         """ adds a message to the queue """
         name, args = self.parse_key(key)
 
+        logging.debug('_set_data: %s %s' % (name,args))
+
         # you talkin to me?
         if not name: return False
 
@@ -90,6 +100,7 @@ class QueuePlugin(MemcachedPlugin):
         # now delete that queue message if it's still around
         message_details = self.to_delete.get(_hash)
 
+        # guess it's gone
         if not message_details:
             return True
 
@@ -105,10 +116,11 @@ class QueuePlugin(MemcachedPlugin):
         # remove the temporary message
         self.delete_underhanded(message_details.temporary_key)
 
+        # remove the to_delete reference
+        del self.to_delete[_hash]
+
         # and we're good 
         return True
-
-
 
     def _get_data(self, key):
         """ returns the next message.
@@ -166,13 +178,20 @@ class QueuePlugin(MemcachedPlugin):
         # return the full key path
         return NS_keys[numbers[0]]
 
-
-    def handle_not_deleted(self,_hash):
+    def handle_not_deleted(self,original_path,current_path):
         """
         Uses the hash of the message to remove the message
         from limbo and add it to the begiing of the queue
         """
-        pass # TODO
+        # grab the message
+        m = self.get_underhanded(current_path)
+
+        # push it to it's old key
+        self.set_underhanded(original_path,m)
+
+        # remove it from it's current key
+        self.delete_underhanded(current_path)
+
 
     def add_delete_watcher(self,key,m,timeout):
         """
@@ -186,12 +205,12 @@ class QueuePlugin(MemcachedPlugin):
         # current key to NS/Qname/HASH
         # HASH being the sha of the msg
 
-        message_hash = self._get_message_hash(m)
+        _hash = self._get_sha(m)
         name, args = self.parse_key(key)
 
         # create our new key
         new_key = '%s/'%self.NS if self.NS else ''
-        new_key += '%s/%s' % (name,message_hash)
+        new_key += '%s/%s' % (name,_hash)
 
         # add our message under it's new key
         self.set_underhanded(new_key,m)
@@ -206,7 +225,7 @@ class QueuePlugin(MemcachedPlugin):
         # setup our callback
         handle_not_deleted = self.handle_not_deleted
         def callback():
-            handle_not_deleted(_hash)
+            handle_not_deleted(key,new_key)
         
         # add in our callback w/ the specified timeout
         callback_token = loop.add_timeout(time.time()+timeout,callback)
