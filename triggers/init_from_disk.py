@@ -39,6 +39,8 @@ class DiskBackFill(Trigger):
         for key in keys:
             blip = Blip(self.data_root,key=key)
             value = blip.get_value()
+            if value is None:
+                continue # don't need nothings
             for plugin in self.server.plugins:
                 if isinstance(plugin,MemcachedPlugin) \
                    and not isinstance(plugin,DiskMemcachedPlugin):
