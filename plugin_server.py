@@ -10,6 +10,12 @@ class PluginServer(Eventable):
 
         logging.debug('plugin server init')
 
+        # flag for if we are currentling
+        # firing our events
+        self.firing = True
+        # list of events to fire
+        self.to_fire = []
+
         # who we serving?
         self.host = None
         self.port = None
@@ -47,8 +53,7 @@ class PluginServer(Eventable):
         # read from the stream until we hit a new line
         stream.read_until('\r\n', func)
 
-    @classmethod
-    def get_handle_read(cls,stream,plugins,handlers=[]):
+    def get_handle_read(self,stream,plugins,handlers=[]):
         logging.debug('plugin server getting handle read:: handlers: %s'
                       % handlers)
 
@@ -80,11 +85,15 @@ class PluginServer(Eventable):
                 for l in line.strip().split('\r\n'):
                     stream.write('%s\r\n' % l)
 
+            # now that we've gone through all the handlers
+            # for this line, fire the events we've been caching
+            self.fire_events()
+
             # wait for the next line
             logging.debug('callables: %s' % callables)
-            cls.wait_for_line(stream,
-                              cls.get_handle_read(stream,plugins,
-                                                  handlers=callables))
+            self.wait_for_line(stream,
+                               self.get_handle_read(stream,plugins,
+                                                    handlers=callables))
 
         return handle_read
 
@@ -106,5 +115,31 @@ class PluginServer(Eventable):
         self.port = port
 
         # it has begun
+        # update the firing so this go out immediately
         self.fire('server_start',self)
 
+        # we no longer want to fire immediately
+        self.firing = False
+
+
+    # we want to be an eventable but we want to delay firing the events
+    # until the cycle is done. If more events fire once the cycle is complete
+    # we do them all until they are done and than do the next cycle
+    def fire(self,*args,**kwargs):
+        # are we currently firing?
+        if not self.firing:
+            # keep our events to the side
+            self.to_fire.append((args,kwargs))
+        else:
+            # if we are firing just let'm go
+            Eventable.fire(self,*args,**kwargs)
+
+    def fire_events(self):
+        # now we actually fire them
+        self.firing = True
+
+        for args, kwargs in self.to_fire:
+            Eventable.fire(self,*args,**kwargs)
+
+        # and we're done
+        self.firing = False
