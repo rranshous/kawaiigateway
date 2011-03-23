@@ -75,6 +75,21 @@ class MemcachedPlugin(Plugin):
 
         self.server.fire('memcached_delete',key,data)
 
+    def handle_incr(self, key, value):
+        # if the value is already in the response
+        # than set it here. else do it and update
+        # the value
+        for line in self.response:
+            if not line.startswith('NOT'):
+                # looks like another plugin
+                # as already taken the liberty
+                # of incrementing for us!
+                self._set_value(key,line[:-1])
+
+        if self._is_key_set(key):
+            
+        
+
     
     # these are functions which will help
     # with setting / getting data w/o going
