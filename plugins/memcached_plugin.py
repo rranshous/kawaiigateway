@@ -37,7 +37,7 @@ class MemcachedPlugin(Plugin):
             set_data(key,data)
             if 'STORED' not in response:
                 response.append('STORED')
-            server.fire('memcached_set',key,data)
+                server.fire('memcached_set',key,data)
             
         return on_set_data
 
