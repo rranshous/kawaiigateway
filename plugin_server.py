@@ -141,5 +141,8 @@ class PluginServer(Eventable):
         for args, kwargs in self.to_fire:
             Eventable.fire(self,*args,**kwargs)
 
+        # reset our to fire
+        self.to_fire = []
+
         # and we're done
         self.firing = False
