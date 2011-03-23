@@ -87,6 +87,7 @@ class MemcachedPlugin(Plugin):
                 self._set_value(key,line[:-1])
 
         if self._is_key_set(key):
+            pass
             
         
 
