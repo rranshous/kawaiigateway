@@ -99,7 +99,7 @@ class MemcachedPlugin(Plugin):
         """ will search through the memcache
             plugins looking for the value """
         for plugin in self.server.plugins:
-            if isintance(plugin,MemcachedPlugin) and not plugin is self:
+            if isinstance(plugin,MemcachedPlugin) and not plugin is self:
                 v = plugin._get_data(key)
                 if v:
                     return v
@@ -110,7 +110,7 @@ class MemcachedPlugin(Plugin):
         Will set the value in all the memcache plugins
         """
         for plugin in self.server.plugins:
-            if isintance(plugin,MemcachedPlugin) and not plugin is self:
+            if isinstance(plugin,MemcachedPlugin) and not plugin is self:
                 plugin._set_data(key,v)
         return None
 
