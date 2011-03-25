@@ -10,6 +10,9 @@ try:
 except ImportException:
     import jsonify as json
 
+## TODO: rewrite this in a generic manner
+##       so that random NS's can take advantage
+
 class ThanksFKTrigger(Trigger):
     
     listeners = [
