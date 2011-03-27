@@ -20,6 +20,12 @@ class ThanksFKTrigger(Trigger):
         ('memcached_delete','handle_delete')
     ]
 
+    def __init__(self):
+        super(ThanksFKTrigger,self).__init__()
+
+        # obj types we are tracking FK's for
+        self.obj_types = ['event','gift','user']
+
     def _deserialize_value_data(self,value):
         return json.loads(value)
 
@@ -50,55 +56,120 @@ class ThanksFKTrigger(Trigger):
                 plugin._set_data(key,v)
         return None
 
-    def handle_set(self,key,value):
+    def _remove_hash_from_other_data(self,obj_type,obj_hash,data):
+        """
+        remove the obj's hash from the other obj's list of hashes
+        """
 
-        # see if they are setting something we care about
-        if not key.startswith('/gift'):
+        # what's our list key?
+        key = '_%s_hashes' % obj_type
+
+        # remove our hash if it's there
+        try:
+            data.get(key,[]).remove(obj_hash)
+        except ValueError:
             return False
 
-        # un-json the value
+        return True
+
+    def _add_hash_to_other_data(self,obj_type,obj_hash,data):
+        """
+        append the obj's hash to the other obj's list of hashes
+        """
+
+        # what list are we appending to
+        key = '_%s_hashes' % obj_type
+
+        # add our obj's hash if it's not already there
+        if obj_hash not in data.get(key,[]):
+            data.setdefault(key,[]).append(obj_hash)
+
+        # not strickly necissary
+        return data
+
+    def _iter_other_obj_refs(data):
+        for k,v in data.iteritems():
+            if k.startswith('_') and k.endswith('_hash'):
+                yield (k,v)
+
+    def we_care(key):
+        """ see if we care about this key """
+        # see if they are setting something we care about
+        # check the obj type.
+        obj_type = [x for x in key.split('/') for x if x][0]
+        if obj_type not in self.obj_types:
+            return False
+        return True
+
+    def handle_set(self,key,value):
+        """
+        if the name space matches one we are looking for we
+        are going to look @ the data being set and if there
+        are any root lvl keys which are `_(obj_type)_hash`
+        than we are going to find the obj it's refering
+        to and update it's `_(obj_type)_hashes` list to
+        include the hash being set (if it's not already there)
+        """
+
+        if not self.we_care(key):
+            return False
+
+        # get to the data obj
         value_data = self._deserialize_value_data(value)
 
-        # get the event hash
-        event_hash = value_data.get('_event_hash')
+        # look for root lvl key's in that are ref's to
+        # other objects
+        for k,v in self._iter_other_obj_refs(value_data):
+            # get the other data
+            other_obj_type = k[1:-5]
+            other_obj_key = '/%s/%s/' % (other_obj_type,v)
+            other_data = self.get_underhanded(other_obj_key)
+            if not other_data:
+                continue
+            other_data = self._deserialize_value_data(other_data)
 
-        # get the event's data
-        event_data = self._deserialize_value_data(
-                        self.get_underhanded('/event/%s' % event_hash))
+            # add our key's hash to the fk hash list
+            # of the other data
+            self._add_hash_to_other_data(obj_type,
+                                         v, other_data)
 
-        # update the event's list of gifts
-        gift_hash = value_data.get('_hash')
-        event_data.setdefault('_gift_hashes',[]).append(gift_hash)
-
-        # re-serialize the data
-        event_data = self._serialize_value_data(event_data)
-
-        # set the data again
-        self.set_underhanded('/event/%s' % event_hash,event_data)
+            # push the other data back
+            other_data = self._serialize_value_data(other_data)
+            self.set_underhanded(other_obj_key,other_data)
 
         return True
 
     def handle_delete(self,key,value):
+        """
+        removes FK hash refs if they exist
+        """
         
-        # see if it's a gift
-        if not key.startswith('/gift'):
+        # see if we care
+        if not self.we_care(key):
             return False
 
-        # figure out what the event's hash is
-        value_data = self._get_value_data(value)
-        event_hash = value_data.get('_event_hash')
+        # get the obj's data
+        value_data = self._deserialize_value_data(value)
 
-        # get the event's data
-        event_data = self._get_data_value(
-                           self.get_underhanded('/event/%s' % event_hash))
+        # look for root lvl key's in that are ref's to
+        # other objects
+        for k,v in self._iter_other_obj_refs(value_data):
+            # get the other data
+            other_obj_type = k[1:-5]
+            other_obj_key = '/%s/%s/' % (other_obj_type,v)
+            other_data = self.get_underhanded(other_obj_key)
+            if not other_data:
+                continue
+            other_data = self._deserialize_value_data(other_data)
 
-        # remove the gift from the event's gift list
-        event_data.remove(value_data.get('_hash'))
+            # remove our key's hash to the fk hash list
+            # of the other data
+            self._remove_hash_from_other_data(obj_type,
+                                              v, other_data)
 
-        # re-serialize the data
-        event_data = self._serialize_value_data(event_data)
+            # push the other data back
+            other_data = self._serialize_value_data(other_data)
+            self.set_underhanded(other_obj_key,other_data)
 
-        # set the data back
-        self.set_underhanded('/event/%s' % event_hash,event_data)
 
         return True
