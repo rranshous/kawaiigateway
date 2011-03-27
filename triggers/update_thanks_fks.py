@@ -42,6 +42,7 @@ class ThanksFKTrigger(Trigger):
             if isinstance(plugin,MemcachedPlugin) and not plugin is self:
                 v = plugin._get_data(key)
                 if v:
+                    logging.debug('got underhanded: %s' % v)
                     return v
         return None
 
@@ -87,19 +88,20 @@ class ThanksFKTrigger(Trigger):
         # not strickly necissary
         return data
 
-    def _iter_other_obj_refs(data):
+    def _iter_other_obj_refs(self,data):
         for k,v in data.iteritems():
             if k.startswith('_') and k.endswith('_hash'):
-                yield (k,v)
+                if not k == '_hash':
+                    yield (k,v)
 
-    def we_care(key):
+    def obj_type(self,key):
         """ see if we care about this key """
         # see if they are setting something we care about
         # check the obj type.
-        obj_type = [x for x in key.split('/') for x if x][0]
+        obj_type = [x for x in key.split('/') if x][0]
         if obj_type not in self.obj_types:
             return False
-        return True
+        return obj_type
 
     def handle_set(self,key,value):
         """
@@ -111,7 +113,8 @@ class ThanksFKTrigger(Trigger):
         include the hash being set (if it's not already there)
         """
 
-        if not self.we_care(key):
+        obj_type = self.obj_type(key)
+        if not obj_type:
             return False
 
         # get to the data obj
@@ -122,7 +125,8 @@ class ThanksFKTrigger(Trigger):
         for k,v in self._iter_other_obj_refs(value_data):
             # get the other data
             other_obj_type = k[1:-5]
-            other_obj_key = '/%s/%s/' % (other_obj_type,v)
+            other_obj_key = '/%s/%s' % (other_obj_type,v)
+            logging.debug('other obj key: %s' % other_obj_key)
             other_data = self.get_underhanded(other_obj_key)
             if not other_data:
                 continue
@@ -137,6 +141,8 @@ class ThanksFKTrigger(Trigger):
             other_data = self._serialize_value_data(other_data)
             self.set_underhanded(other_obj_key,other_data)
 
+            logging.debug('updated fk: %s %s' % (obj_type,k))
+
         return True
 
     def handle_delete(self,key,value):
@@ -145,7 +151,8 @@ class ThanksFKTrigger(Trigger):
         """
         
         # see if we care
-        if not self.we_care(key):
+        obj_type = self.obj_type(key)
+        if obj_type:
             return False
 
         # get the obj's data
@@ -156,7 +163,7 @@ class ThanksFKTrigger(Trigger):
         for k,v in self._iter_other_obj_refs(value_data):
             # get the other data
             other_obj_type = k[1:-5]
-            other_obj_key = '/%s/%s/' % (other_obj_type,v)
+            other_obj_key = '/%s/%s' % (other_obj_type,v)
             other_data = self.get_underhanded(other_obj_key)
             if not other_data:
                 continue
@@ -171,5 +178,6 @@ class ThanksFKTrigger(Trigger):
             other_data = self._serialize_value_data(other_data)
             self.set_underhanded(other_obj_key,other_data)
 
+            logging.debug('updated fk: %s %s' % (obj_type,k))
 
         return True

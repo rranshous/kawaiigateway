@@ -73,7 +73,8 @@ class DiskMemcachedPlugin(MemcachedPlugin):
 
         # update the server's memory plugin w/ this
         # k/v pair since it must have missed
-        self.update_memory_plugin(key,value)
+        if value:
+            self.update_memory_plugin(key,value)
 
         return value
 
