@@ -235,17 +235,20 @@ class QueuePlugin(MemcachedPlugin):
             timeout = int(args[0])
 
         # if timeout is positive set it
-        if timeout > -1:
+        if timeout > 0:
             self.add_delete_watcher(key,m,timeout)
 
-        logging.debug('deleting key: %s' % key)
+        # if the timeout is 0 than they only
+        # want to peek the msg, not actually consume it
+        if timeout == 0:
+            logging.debug('deleting key: %s' % key)
 
-        # now lets remove the message
-        self.delete_underhanded(key)
+            # now lets remove the message
+            self.delete_underhanded(key)
 
-        # delete underhanded doesn't update us
-        # we are only storing the key
-        self._key_deleted(key)
+            # delete underhanded doesn't update us
+            # we are only storing the key
+            self._key_deleted(key)
 
         # stop the other plugins from storing
         # queue/<name> values based on our return value
