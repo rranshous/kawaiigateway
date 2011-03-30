@@ -80,12 +80,17 @@ class MemcachedPlugin(Plugin):
         self.server.fire('memcached_delete',key,data)
 
     def __incr_data(self, key, value):
+        logging.debug('incr: %s %s' % (key,value))
+
         # grab the existing data
         data = self._get_data(key)
 
         # if there's no data return False
         if not data:
+            logging.debug('no value found')
             return False
+
+        logging.debug('existing value: %s' % data)
 
         # make sure the value is a float
         value = float(value)
@@ -95,6 +100,8 @@ class MemcachedPlugin(Plugin):
 
         # if we have data lets apply our incr
         new_data = data + value
+
+        logging.debug('new value: %s' % new_data)
 
         # if the new value is less than 0 set it to 0
         if new_data < 0:
@@ -106,14 +113,14 @@ class MemcachedPlugin(Plugin):
         # set our new data
         self._set_data(key,new_data)
 
-        return True
+        return new_data
 
     def _incr_data(self, key, value):
-        self.__incr_data(key, value)
+        return self.__incr_data(key, value)
 
     def _decr_data(self, key, value):
         # use incr but w/ negative delta
-        self.__incr_data(key, -value)
+        return self.__incr_data(key, -value)
 
     def _handle_incr(self, key, value, noreply=False):
         # if the value is already in the response
@@ -127,14 +134,15 @@ class MemcachedPlugin(Plugin):
                 self._set_value(key,line[:-1])
 
         # increment the data
-        if not self._incr_data(key, value):
+        new_value = self._incr_data(key, value)
+        if not new_value:
             # if we couldn't do it return error
             self.write_distinct_line('NOT_FOUND')
 
-        # return our new value if they want
-        new_value = self._get_data(key)
-        if not noreply:
-            self.write_distinct_line('%s' % new_value)
+        else:
+            # return our new value if they want
+            if not noreply:
+                self.write_distinct_line('%s' % new_value)
 
         # let everyone else know we have incremented
         self.server.fire('memcached_incr',key,existing_value,value,new_value)
@@ -186,8 +194,10 @@ class MemcachedPlugin(Plugin):
         """
         for plugin in self.server.plugins:
             if isinstance(plugin,MemcachedPlugin) and not plugin is self:
-                plugin._incr_data(key,value)
-        return None
+                v = plugin._incr_data(key,value)
+                if v is False:
+                    return False
+        return v
 
         
 

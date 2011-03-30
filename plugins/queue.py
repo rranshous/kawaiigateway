@@ -72,10 +72,14 @@ class QueuePlugin(MemcachedPlugin):
         if not self.incr_underhanded(head_key,'1'):
             # no head exists, start one
             self.set_underhanded(head_key,'0')
-            return 0
+            return '0'
 
         # and than get the new head value
         next = self.get_underhanded(head_key)
+
+        # we want to return an integer
+        # next should be a decimal
+        next = str(next.split('.')[0])
 
         # and return that bitch
         return next
@@ -260,7 +264,6 @@ class QueuePlugin(MemcachedPlugin):
         # sort our keys
         NS_keys = {}
         numbers = []
-        logging.debug('used_keys: %s' % self.used_keys)
         for k in self.used_keys:
             name, args = self.parse_key(k)
             if name:
@@ -271,9 +274,6 @@ class QueuePlugin(MemcachedPlugin):
 
         # sort'm
         numbers.sort()
-
-        logging.debug('NS_keys: %s' % NS_keys)
-        logging.debug('numbers: %s' % numbers)
 
         # if we didn't find anything .. None it is
         if not NS_keys or not numbers:
