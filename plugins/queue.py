@@ -11,12 +11,21 @@ import time
 
 import logging
 
+from collections import namedtuple
+
+import hashlib
+
 # simple way of keeping message info
 Message = namedtuple('Message',['key','message','callback_token',
                                 'temporary_key'])
 
 class QueuePlugin(MemcachedPlugin):
+    # the namespace we're opperating in
     NS = 'queue'
+
+    # sub name spaces we should not act on
+    ignored_sub_namespaces = ['head','out']
+
     default_timeout = 60 # seconds
 
     """
@@ -32,12 +41,44 @@ class QueuePlugin(MemcachedPlugin):
         # which have been pulled but not
         # deleted
         self.to_delete = {}
+
+        logging.debug('init queue')
         
         # pay ur respects
         super(QueuePlugin,self).__init__()
 
-    def _get_sha(self,s):
-        return sha.new(s).digest()
+    def _get_md5(self,s):
+        md5 = hashlib.md5()
+        md5.update(s)
+        _hash = md5.hexdigest()
+        return _hash
+
+    def _is_key_set(self,key):
+        """
+        this function acts as the gatekeeper. before getting
+        to our plugins data handlers it's going to check and see
+        if we have the key. Since we won't actually have a key set for
+        the things it's setting we need to pretend we do.
+        """
+        return True # for now we'll just take all the delete's and gets
+
+    def _get_next_head(self, name):
+        """
+        returns the next head id for the queue name
+        """
+
+        # we are going to increment our head counter
+        head_key = '%s/%s/head' % (self.NS,name)
+        if not self.incr_underhanded(head_key,'1'):
+            # no head exists, start one
+            self.set_underhanded(head_key,'0')
+            return 0
+
+        # and than get the new head value
+        next = self.get_underhanded(head_key)
+
+        # and return that bitch
+        return next
 
     def parse_key(self,k):
         """
@@ -49,18 +90,18 @@ class QueuePlugin(MemcachedPlugin):
         the returned tuple will always be len 2
 
         """
-        p = [s for s in key.split('/') if s]
+        p = [s for s in k.split('/') if s]
         info = {}
         
         # first see if the namespace matches
-        if not self.NS or p[0] =! self.NS:
+        if not self.NS or p[0] != self.NS:
             return (None,[]) # guess not
 
         # did we have a namespace in the key ?
         name = p[1 if self.NS else 0]
         try:
-            args = tuple(p[2 if self.NS else 1])
-        except IndexException:
+            args = tuple(p[2 if self.NS else 1:])
+        except:
             args = []
     
         return (name,args)
@@ -69,19 +110,39 @@ class QueuePlugin(MemcachedPlugin):
         """ adds a message to the queue """
         name, args = self.parse_key(key)
 
-        logging.debug('_set_data: %s %s' % (name,args))
+        logging.debug('wants me to set data: %s' % key)
 
         # you talkin to me?
         if not name: return False
 
-        # check and see what the next ID in the queue is
-        next = self.server_client.incr('%s/%s/head' % (self.NS,
-                                                       name)
+        # if it is a head request ignore it
+        if args and args[0] in self.ignored_sub_namespaces:
+            logging.debug('skipping %s' % key)
+            return False
+
+        # if we have args than we must be
+        # backloading from the disk or something
+        # let it hit our key tracking but don't act on it
+        # still don't track head's
+        if args:
+            logging.debug('super n stop: %s' % key)
+            super(QueuePlugin,self)._set_data(key,value)
+            return False
+
+
+        logging.debug('_set_data: %s %s' % (name,args))
+
+        # get our next head for the queue
+        next = self._get_next_head(name)
+
+        logging.debug('next head: %s' % next)
 
         # now update it to be our message
-        self.server_client.set('%s/%s/%s' % (self.NS,
-                                             info.get('name'),
-                                             next))
+        new_key = '%s/%s/%s' % (self.NS,name,next)
+        self.set_underhanded(new_key,value)
+
+        # show some respect to ur elders
+        super(QueuePlugin,self)._set_data(new_key,value)
 
         return True
 
@@ -94,7 +155,7 @@ class QueuePlugin(MemcachedPlugin):
         
         name, args = self.parse_key(key)
 
-        # the first arg should be the sha of the message
+        # the first arg should be the md5 of the message
         _hash = args[0]
 
         # now delete that queue message if it's still around
@@ -119,6 +180,9 @@ class QueuePlugin(MemcachedPlugin):
         # remove the to_delete reference
         del self.to_delete[_hash]
 
+        # show some respect to ur elders
+        super(QueuePlugin,self)._delete_data(key)
+
         # and we're good 
         return True
 
@@ -135,13 +199,24 @@ class QueuePlugin(MemcachedPlugin):
         name, args = self.parse_key(key)
 
         # for us?
-        if not name: return True
+        if not name: return None
 
         # get the next key
         key = self.get_next_key()
 
+        # if we didn't get a next key than there 
+        # are no items to be had
+        if not key: return None
+
         # grab it's data w/o going through the stack
         m = self.get_underhanded(key)
+
+        # make sure that our arg is actually not a
+        # head request or something
+        if args and arg[0] in self.ignored_sub_namespaces:
+            return None
+
+        logging.debug('getting: %s' % name)
 
         # see if there is a timeout
         timeout = self.default_timeout
@@ -155,15 +230,19 @@ class QueuePlugin(MemcachedPlugin):
         # now lets remove the message
         self.delete_underhanded(key)
 
+        # respect son !
+        super(QueuePlugin,self)._get_data(key)
+
         # give back the message body
         return m
 
     def get_next_key(self):
         # TODO: make this not horribly terrible
-        
+
         # sort our keys
         NS_keys = {}
         numbers = []
+        logging.debug('used_keys: %s' % self.used_keys)
         for k in self.used_keys:
             name, args = self.parse_key(k)
             if name:
@@ -174,6 +253,13 @@ class QueuePlugin(MemcachedPlugin):
 
         # sort'm
         numbers.sort()
+
+        logging.debug('NS_keys: %s' % NS_keys)
+        logging.debug('numbers: %s' % numbers)
+
+        # if we didn't find anything .. None it is
+        if not NS_keys or not numbers:
+            return None
 
         # return the full key path
         return NS_keys[numbers[0]]
@@ -199,25 +285,26 @@ class QueuePlugin(MemcachedPlugin):
         re-adding the message to the queue if it has not been
         deleted
         """
+        logging.debug('adding delete watcher: key: %s ;; message: %s ;; timeout: %s'
+                        % (key,m,timeout))
+
         # try to use tornadio loop
         # to mark a message as removed from the message queue
         # but not yet deleted we are going to move it from it's
         # current key to NS/Qname/HASH
-        # HASH being the sha of the msg
+        # HASH being the md5 of the msg
 
-        _hash = self._get_sha(m)
+        # get the hash of the msg, used to track it
+        # while it's in 'out' limbo
+        _hash = self._get_md5(m)
         name, args = self.parse_key(key)
 
         # create our new key
         new_key = '%s/'%self.NS if self.NS else ''
-        new_key += '%s/%s' % (name,_hash)
+        new_key += '%s/out/%s' % (name,_hash)
 
         # add our message under it's new key
         self.set_underhanded(new_key,m)
-
-        # get the message hash, which is used
-        # to track the message while it's in limbo
-        _hash = self._get_sha(m)
 
         # get the current loop instance
         loop = IOLoop.instance()
@@ -231,7 +318,7 @@ class QueuePlugin(MemcachedPlugin):
         callback_token = loop.add_timeout(time.time()+timeout,callback)
             
         # we need to add this message to our to_delete lookup
-        self.to_delete[_hash] = Message(key,message,callback_token,new_key)
+        self.to_delete[_hash] = Message(key,m,callback_token,new_key)
 
         # add we're done!
         return True

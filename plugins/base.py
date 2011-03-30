@@ -12,6 +12,8 @@ class Plugin(object):
     # these will get passed to the object when it is initialized
     # cmdline_options = []
 
+    cmdline_options = []
+
     # init expects kwargs for each of the cmdline options
     def __init__(self):
         # the server will set the server attribute
@@ -33,7 +35,8 @@ class Plugin(object):
         args = line.split()[1:]
         method_name = 'handle_%s' % action.lower()
         if callable(getattr(self,method_name,False)):
-            logging.debug('plugin calling: %s' % method_name)
+            logging.debug('plugin calling: %s %s' % (self.__class__.__name__,
+                                                     method_name))
             return getattr(self,method_name)(*args)
 
         return False

@@ -13,7 +13,10 @@ class MemcachedPlugin(Plugin):
         self.used_keys.add(key)
 
     def _key_deleted(self,key):
-        self.used_keys.remove(key)
+        try: # might not exist
+            self.used_keys.remove(key)
+        except KeyError:
+            pass
 
     def _is_key_set(self,key):
         return key in self.used_keys
@@ -45,6 +48,7 @@ class MemcachedPlugin(Plugin):
         return True
 
     def handle_get(self, *keys):
+        logging.debug('handling get: %s' % keys)
         for key in keys:
             # since another plugin could have already
             # supplied the value lets check
@@ -66,7 +70,7 @@ class MemcachedPlugin(Plugin):
         return True
 
     def handle_delete(self, key, *args):
-        if key in self.used_keys:
+        if self._is_key_set(key):
             data = self._get_data(key)
             self._delete_data(key)
             self.write_distinct_line('DELETED')
@@ -75,7 +79,43 @@ class MemcachedPlugin(Plugin):
 
         self.server.fire('memcached_delete',key,data)
 
-    def handle_incr(self, key, value):
+    def __incr_data(self, key, value):
+        # grab the existing data
+        data = self._get_data(key)
+
+        # if there's no data return False
+        if not data:
+            return False
+
+        # make sure the value is a float
+        value = float(value)
+
+        # make sure the data is a float
+        data = float(data)
+
+        # if we have data lets apply our incr
+        new_data = data + value
+
+        # if the new value is less than 0 set it to 0
+        if new_data < 0:
+            new_data = 0
+
+        # back to string
+        new_data = str(new_data)
+
+        # set our new data
+        self._set_data(key,new_data)
+
+        return True
+
+    def _incr_data(self, key, value):
+        self.__incr_data(key, value)
+
+    def _decr_data(self, key, value):
+        # use incr but w/ negative delta
+        self.__incr_data(key, -value)
+
+    def _handle_incr(self, key, value, noreply=False):
         # if the value is already in the response
         # than set it here. else do it and update
         # the value
@@ -86,10 +126,27 @@ class MemcachedPlugin(Plugin):
                 # of incrementing for us!
                 self._set_value(key,line[:-1])
 
-        if self._is_key_set(key):
-            pass
-            
-        
+        # increment the data
+        if not self._incr_data(key, value):
+            # if we couldn't do it return error
+            self.write_distinct_line('NOT_FOUND')
+
+        # return our new value if they want
+        new_value = self._get_data(key)
+        if not noreply:
+            self.write_distinct_line('%s' % new_value)
+
+        # let everyone else know we have incremented
+        self.server.fire('memcached_incr',key,existing_value,value,new_value)
+
+    def handle_incr(self, key, value, noreply=False):
+        # pass through to the general function
+        self._handle_incr(key, value)
+
+    def handle_decr(self, key, value, noreply=False):
+        # pass through to general, changing the sign so that
+        # the value is decremented
+        self._handle_incr(key, -value)
 
     
     # these are functions which will help
@@ -119,9 +176,19 @@ class MemcachedPlugin(Plugin):
         Delete the value in al lthe memcache plugins
         """
         for plugin in self.server.plugins:
-            if isintance(plugin,MemcachedPlugin) and not plugin is self:
+            if isinstance(plugin,MemcachedPlugin) and not plugin is self:
                 plugin._delete_data(key)
         return None
+
+    def incr_underhanded(self, key, value):
+        """
+        incr hte value in all the memcache plugins
+        """
+        for plugin in self.server.plugins:
+            if isinstance(plugin,MemcachedPlugin) and not plugin is self:
+                plugin._incr_data(key,value)
+        return None
+
         
 
     # this property will return back a new client
