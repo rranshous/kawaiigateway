@@ -199,16 +199,3 @@ class MemcachedPlugin(Plugin):
                     return False
         return v
 
-        
-
-    # this property will return back a new client
-    # for the running server
-    # TODO: not have to use real sockets?
-    def _get_server_client(self):
-        host = self.server.host
-        port = self.server.port
-        # shit, this is probably going to block, killing the server
-        c = memcache.Client(['%s:%s' % (host,port)])
-        return c
-
-    server_client = property(_get_server_client)
