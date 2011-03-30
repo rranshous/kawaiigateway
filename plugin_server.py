@@ -10,6 +10,11 @@ class PluginServer(Eventable):
 
         logging.debug('plugin server init')
 
+        # this flag tells other whether we should
+        # skip the handlers left in a handle read loop
+        # it gets reset False @ the begining of each handle read
+        self.skip_other_handlers = False
+
         # flag for if we are currentling
         # firing our events
         self.firing = True
@@ -57,6 +62,9 @@ class PluginServer(Eventable):
         logging.debug('plugin server getting handle read:: handlers: %s'
                       % handlers)
 
+        # reset our flag
+        self.skip_other_handlers = False
+
         # if we weren't passed any handlers than use the
         # plugin handlers
         if not handlers:
@@ -70,6 +78,11 @@ class PluginServer(Eventable):
             response = []
             callables = []
             for func in handlers:
+                # if they want us to skip, do so
+                if self.skip_other_handlers:
+                    logging.debug('skipping other handlers')
+                    continue
+
                 # if the handle function returns a callable
                 # than we should wait on the stream for the next
                 # line and pass it to the callable

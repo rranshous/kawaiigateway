@@ -141,6 +141,11 @@ class QueuePlugin(MemcachedPlugin):
         new_key = '%s/%s/%s' % (self.NS,name,next)
         self.set_underhanded(new_key,value)
 
+        # stop the other plugins from storing
+        # queue/<name> values based on our return value
+        logging.debug('setting skip other handlers')
+        self.server.skip_other_handlers = True
+
         # show some respect to ur elders
         super(QueuePlugin,self)._set_data(new_key,value)
 
@@ -208,6 +213,8 @@ class QueuePlugin(MemcachedPlugin):
         # are no items to be had
         if not key: return None
 
+        logging.debug('next_key: %s' % key)
+
         # grab it's data w/o going through the stack
         m = self.get_underhanded(key)
 
@@ -227,8 +234,19 @@ class QueuePlugin(MemcachedPlugin):
         if timeout > -1:
             self.add_delete_watcher(key,m,timeout)
 
+        logging.debug('deleting key: %s' % key)
+
         # now lets remove the message
         self.delete_underhanded(key)
+
+        # delete underhanded doesn't update us
+        # we are only storing the key
+        self._key_deleted(key)
+
+        # stop the other plugins from storing
+        # queue/<name> values based on our return value
+        logging.debug('setting skip other handlers')
+        self.server.skip_other_handlers = True
 
         # respect son !
         super(QueuePlugin,self)._get_data(key)
@@ -269,6 +287,9 @@ class QueuePlugin(MemcachedPlugin):
         Uses the hash of the message to remove the message
         from limbo and add it to the begiing of the queue
         """
+
+        logging.debug('handling not deleted: %s %s' % (original_path,current_path))
+
         # grab the message
         m = self.get_underhanded(current_path)
 
@@ -319,6 +340,9 @@ class QueuePlugin(MemcachedPlugin):
             
         # we need to add this message to our to_delete lookup
         self.to_delete[_hash] = Message(key,m,callback_token,new_key)
+
+        # remove the current data
+        self.delete_underhanded(key)
 
         # add we're done!
         return True

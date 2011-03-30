@@ -91,7 +91,10 @@ class MemoryMemcachedPlugin(MemcachedPlugin,MemoryStore):
 
     def _delete_data(self, key):
         super(MemoryMemcachedPlugin,self)._delete_data(key)
-        self.memory_usage -= self.value_sizes[key]
-        del self.value_sizes[key]
-        del self.memory_store[key]
+        try:
+            self.memory_usage -= self.value_sizes[key]
+            del self.value_sizes[key]
+            del self.memory_store[key]
+        except KeyError:
+            pass # not there =/
         return True
