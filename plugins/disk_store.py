@@ -9,6 +9,7 @@ from memcached_plugin import MemcachedPlugin
 from memory_store import MemoryStore
 import logging
 from triggers import DiskBackFill
+import multiprocessing
 
 class DiskMemcachedPlugin(MemcachedPlugin):
     cmdline_options = [
@@ -28,14 +29,22 @@ class DiskMemcachedPlugin(MemcachedPlugin):
     server = property(lambda s: s.__server,
                       _set_server)
 
-    def __init__(self,storage_root=None):
+    def __init__(self,storage_root=None,backfill=True,
+                      seperate_process=True):
         super(DiskMemcachedPlugin,self).__init__()
         self.storage_root = storage_root
 
         # if we can, lets add the back fill trigger
         # so that the other memcached plugins can get
         # to our persistant datas =]
-        self.backfill_trigger = DiskBackFill(self.storage_root)
+        if backfill:
+            self.backfill_trigger = DiskBackFill(self.storage_root)
+
+        # we are going to setup a seperate process to do our
+        # file writing in
+        self.write_queue = multiprocessing.Queue()
+        self.write_process = WriterProcess(self.write_queue,
+                                           self.storage_root)
 
     def handle(self,stream,line,response):
         # if we don't know where my data is than don't do anything
@@ -61,9 +70,20 @@ class DiskMemcachedPlugin(MemcachedPlugin):
         return blip.has_value()
 
     def _set_data(self, key, value):
+        # if we have a seperate process use it
+        if self.write_queue:
+            logging.debug('disk set data using seperate process')
+            self.write_queue.put((key,value))
+        else:
+            self._write_data(self,key,value)
+
+        return True
+
+    def _write_data(self,key,value):
         super(DiskMemcachedPlugin,self)._set_data(key,value)
         blip = self._get_blip(key,value)
         blip.flush()
+
         return True
 
     def _get_data(self, key):
@@ -77,7 +97,6 @@ class DiskMemcachedPlugin(MemcachedPlugin):
             self.update_memory_plugin(key,value)
 
         return value
-
 
     def _delete_data(self, key):
         super(DiskMemcachedPlugin,self)._delete_data(key)
@@ -95,3 +114,23 @@ class DiskMemcachedPlugin(MemcachedPlugin):
                     logging.debug('updating memory plugin: %s' % k)
                     plugin._set_data(k,v)
 
+
+class WriterProcess(multiprocessing.Process):
+    def run(self, work_queue, storage_root):
+        # create our own disk plugin
+        # we'll lean on it to do the work
+        disk_plugin = DiskMemcachedPlugin(storage_root,
+                                          backfill=False)
+
+        # now just sit on our work queue
+        while True:
+            try:
+                # we just wait and wait for work
+                work = work_queue.get(True,5)
+
+                logging.debug('process writing: %s' % key)
+
+                # the work should be a tuple with the key and value
+                disk_plugin._write_data(**work)
+            except multiprocessing.Empty:
+                pass

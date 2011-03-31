@@ -59,6 +59,8 @@ def main():
     # start up our server
     server = Server(active_plugins,active_triggers)
     server.start(options.host, options.port)
+
+    # start the big loop in the sky
     ioloop.IOLoop.instance().start()
 
 if __name__ == '__main__':
