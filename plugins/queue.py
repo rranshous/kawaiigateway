@@ -60,7 +60,14 @@ class QueuePlugin(MemcachedPlugin):
         if we have the key. Since we won't actually have a key set for
         the things it's setting we need to pretend we do.
         """
-        return True # for now we'll just take all the delete's and gets
+        # since none of our functions want someting outside
+        # our name space filter for that
+        name, args = self.parse_key(key)
+
+        if not name:
+            return False
+
+        # now we can actually take a look and see
 
     def _get_next_head(self, name):
         """
@@ -222,9 +229,13 @@ class QueuePlugin(MemcachedPlugin):
         # grab it's data w/o going through the stack
         m = self.get_underhanded(key)
 
+        # if there isn't a mesasge to be had, fail
+        if not m:
+            return False
+
         # make sure that our arg is actually not a
         # head request or something
-        if args and arg[0] in self.ignored_sub_namespaces:
+        if args and args[0] in self.ignored_sub_namespaces:
             return None
 
         logging.debug('getting: %s' % name)
@@ -240,7 +251,8 @@ class QueuePlugin(MemcachedPlugin):
 
         # if the timeout is 0 than they only
         # want to peek the msg, not actually consume it
-        if timeout == 0:
+        # if timeout is < 0 we want to delete it immediately
+        if timeout < 0:
             logging.debug('deleting key: %s' % key)
 
             # now lets remove the message
@@ -330,6 +342,9 @@ class QueuePlugin(MemcachedPlugin):
         # add our message under it's new key
         self.set_underhanded(new_key,m)
 
+        # update that we are tracking it
+        self._key_set(new_key)
+
         # get the current loop instance
         loop = IOLoop.instance()
 
@@ -346,6 +361,9 @@ class QueuePlugin(MemcachedPlugin):
 
         # remove the current data
         self.delete_underhanded(key)
+
+        # remove the fact we are tracking it
+        self._delete_key(key)
 
         # add we're done!
         return True

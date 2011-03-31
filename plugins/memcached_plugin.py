@@ -73,11 +73,13 @@ class MemcachedPlugin(Plugin):
         if self._is_key_set(key):
             data = self._get_data(key)
             self._delete_data(key)
+            # we don't care if someone else already
+            # said not found
+            self.response = []
             self.write_distinct_line('DELETED')
+            self.server.fire('memcached_delete',key,data)
         else:
             self.write_distinct_line('NOT_FOUND')
-
-        self.server.fire('memcached_delete',key,data)
 
     def __incr_data(self, key, value):
         logging.debug('incr: %s %s' % (key,value))
