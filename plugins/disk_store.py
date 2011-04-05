@@ -30,18 +30,31 @@ class DiskMemcachedPlugin(MemcachedPlugin):
         """
         self.__server = server
         logging.debug('disk cache setting server on backfill trigger')
-        self.backfill_trigger.server = server
+        if getattr(self,'backfill_trigger',None):
+            self.backfill_trigger.server = server
 
     server = property(lambda s: s.__server,
                       _set_server)
 
-    def __init__(self,storage_root,
-                      backfill,
-                      seperate_process):
+    def __init__(self,storage_root=None,
+                      backfill=True,
+                      seperate_process=False):
         super(DiskMemcachedPlugin,self).__init__()
 
-        logging.debug("backfill: %s" % backfill)
-        logging.debug("seperate_process: %s" % seperate_process)
+        # massage our cmdline options
+        # TODO move this out of the plugin
+        if backfill in (True,'True','true','y','1'):
+            backfill = True
+        else:
+            backfill = False
+        if seperate_process in (True,'True','true','y','1'):
+            seperate_process = True
+        else:
+            seperate_process = False
+
+        # TODO: These cmd line options dont appear to be respected
+        logging.debug("backfill: %s" % str(backfill))
+        logging.debug("seperate_process: %s" % str(seperate_process))
         logging.debug("storage_root: %s" % storage_root)
 
         # where's the data going?

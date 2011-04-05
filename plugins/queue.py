@@ -67,7 +67,8 @@ class QueuePlugin(MemcachedPlugin):
         if not name:
             return False
 
-        # now we can actually take a look and see
+        # TODO now we can actually take a look and see
+        return True
 
     def _get_next_head(self, name):
         """
@@ -215,7 +216,9 @@ class QueuePlugin(MemcachedPlugin):
         name, args = self.parse_key(key)
 
         # for us?
-        if not name: return None
+        if not name:
+            logging.debug('not for us')
+            return None
 
         # get the next key
         key = self.get_next_key()
@@ -252,6 +255,7 @@ class QueuePlugin(MemcachedPlugin):
 
         # if the timeout is 0 than they only
         # want to peek the msg, not actually consume it
+
         # if timeout is < 0 we want to delete it immediately
         if timeout < 0:
             logging.debug('deleting key: %s' % key)
