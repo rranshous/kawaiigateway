@@ -5,6 +5,6 @@ from queue import QueuePlugin
 # there is signifigance to the order
 plugins = [
     QueuePlugin,
-    MemoryMemcachedPlugin
- #   DiskMemcachedPlugin
+    MemoryMemcachedPlugin,
+    DiskMemcachedPlugin
 ]

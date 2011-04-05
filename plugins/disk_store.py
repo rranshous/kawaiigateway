@@ -9,13 +9,19 @@ from memcached_plugin import MemcachedPlugin
 from memory_store import MemoryStore
 import logging
 from triggers import DiskBackFill
-import multiprocessing
+import multiprocessing, Queue
 
 class DiskMemcachedPlugin(MemcachedPlugin):
     cmdline_options = [
         (('storage_root',),
          {'default':None,
-          'help':"where disk memcache plugin should save it's data"})
+          'help':"where disk memcache plugin should save it's data"}),
+        (('seperate_process',),
+         {'default':False,
+          'help':"should we do our file writes in a seperate process?"}),
+        (('backfill',),
+         {'default':True,
+          'help':"populate from the storage root"})
     ]
 
     def _set_server(self,server):
@@ -29,9 +35,16 @@ class DiskMemcachedPlugin(MemcachedPlugin):
     server = property(lambda s: s.__server,
                       _set_server)
 
-    def __init__(self,storage_root=None,backfill=True,
-                      seperate_process=True):
+    def __init__(self,storage_root,
+                      backfill,
+                      seperate_process):
         super(DiskMemcachedPlugin,self).__init__()
+
+        logging.debug("backfill: %s" % backfill)
+        logging.debug("seperate_process: %s" % seperate_process)
+        logging.debug("storage_root: %s" % storage_root)
+
+        # where's the data going?
         self.storage_root = storage_root
 
         # if we can, lets add the back fill trigger
@@ -42,9 +55,13 @@ class DiskMemcachedPlugin(MemcachedPlugin):
 
         # we are going to setup a seperate process to do our
         # file writing in
-        self.write_queue = multiprocessing.Queue()
-        self.write_process = WriterProcess(self.write_queue,
-                                           self.storage_root)
+        self.seperate_process = seperate_process
+        if self.seperate_process:
+            logging.debug('starting seperate writer process')
+            self.write_queue = multiprocessing.Queue()
+            self.write_process = WriterProcess(self.storage_root,
+                                               self.write_queue)
+            self.write_process.start()
 
     def handle(self,stream,line,response):
         # if we don't know where my data is than don't do anything
@@ -71,15 +88,16 @@ class DiskMemcachedPlugin(MemcachedPlugin):
 
     def _set_data(self, key, value):
         # if we have a seperate process use it
-        if self.write_queue:
+        if self.seperate_process:
             logging.debug('disk set data using seperate process')
             self.write_queue.put((key,value))
         else:
-            self._write_data(self,key,value)
+            self._write_data(key,value)
 
         return True
 
     def _write_data(self,key,value):
+        logging.debug('writing to disk %s' % key)
         super(DiskMemcachedPlugin,self)._set_data(key,value)
         blip = self._get_blip(key,value)
         blip.flush()
@@ -115,12 +133,30 @@ class DiskMemcachedPlugin(MemcachedPlugin):
                     plugin._set_data(k,v)
 
 
+
 class WriterProcess(multiprocessing.Process):
-    def run(self, work_queue, storage_root):
+
+    """
+    writes to the disk outside the main process
+    """
+
+    def __init__(self,storage_root,work_queue):
+        self.work_queue = work_queue
+        self.storage_root = storage_root
+        super(WriterProcess,self).__init__()
+
+    def run(self):
+
+        storage_root = self.storage_root
+        work_queue = self.work_queue
+
         # create our own disk plugin
         # we'll lean on it to do the work
         disk_plugin = DiskMemcachedPlugin(storage_root,
-                                          backfill=False)
+                                          backfill=False,
+                                          seperate_process=False)
+
+        logging.debug('sub process running')
 
         # now just sit on our work queue
         while True:
@@ -128,9 +164,9 @@ class WriterProcess(multiprocessing.Process):
                 # we just wait and wait for work
                 work = work_queue.get(True,5)
 
-                logging.debug('process writing: %s' % key)
+                logging.debug('process writing: %s %s' % work)
 
                 # the work should be a tuple with the key and value
-                disk_plugin._write_data(**work)
-            except multiprocessing.Empty:
+                disk_plugin._write_data(*work)
+            except Queue.Empty:
                 pass

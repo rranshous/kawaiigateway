@@ -231,6 +231,7 @@ class QueuePlugin(MemcachedPlugin):
 
         # if there isn't a mesasge to be had, fail
         if not m:
+            logging.debug('empty queue')
             return False
 
         # make sure that our arg is actually not a
