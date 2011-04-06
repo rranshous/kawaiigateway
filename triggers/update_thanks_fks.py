@@ -135,7 +135,8 @@ class ThanksFKTrigger(Trigger):
             # add our key's hash to the fk hash list
             # of the other data
             self._add_hash_to_other_data(obj_type,
-                                         v, other_data)
+                                         value_data.get('_hash'),
+                                         other_data)
 
             # push the other data back
             other_data = self._serialize_value_data(other_data)
