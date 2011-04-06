@@ -319,6 +319,38 @@ class QueuePlugin(MemcachedPlugin):
         # remove it from it's current key
         self.delete_underhanded(current_path)
 
+    def _get_stats(self):
+        """
+        returns back stat's about all the queues
+        """
+
+        # for each queue we want to return
+        # the number of messages
+        stats = []
+
+        # first figure out all the queue's we have
+        names = set()
+        counts = {}
+        for key in self.used_keys:
+            name, args = self._parse_key(key)
+            if name:
+                names.add(name)
+                if name not in counts:
+                    counts[name] = 1
+                else:
+                    counts[name] += 1
+
+        # now that we have all the queue names
+        # and their counts return back our data
+        # TODO: more
+        pass
+
+    def _get_all_messages(self,name):
+        """
+        shortcut for doing a gets against
+        every message
+        """
+        pass
 
     def add_delete_watcher(self,key,m,timeout):
         """

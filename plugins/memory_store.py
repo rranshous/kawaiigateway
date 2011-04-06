@@ -81,6 +81,7 @@ class MemoryMemcachedPlugin(MemcachedPlugin,MemoryStore):
 
         # not sure yet when i want to cull the memory pool,
         # lets try doing it every set?
+        # TODO: better
         self.cull_pool()
 
         return True
