@@ -69,9 +69,10 @@ class ThanksFKTrigger(Trigger):
         try:
             data.get(key,[]).remove(obj_hash)
         except ValueError:
-            return False
+            logging.debug('couldnt remove fk, not present %s %s'
+                          % (obj_hash,data))
 
-        return True
+        return data
 
     def _add_hash_to_other_data(self,obj_type,obj_hash,data):
         """
@@ -150,10 +151,10 @@ class ThanksFKTrigger(Trigger):
         """
         removes FK hash refs if they exist
         """
-        
+
         # see if we care
         obj_type = self.obj_type(key)
-        if obj_type:
+        if not obj_type:
             return False
 
         # get the obj's data
@@ -162,18 +163,24 @@ class ThanksFKTrigger(Trigger):
         # look for root lvl key's in that are ref's to
         # other objects
         for k,v in self._iter_other_obj_refs(value_data):
+            logging.debug('handling ref: %s %s' % (k,v))
+
             # get the other data
             other_obj_type = k[1:-5]
             other_obj_key = '/%s/%s' % (other_obj_type,v)
             other_data = self.get_underhanded(other_obj_key)
+
             if not other_data:
                 continue
+
             other_data = self._deserialize_value_data(other_data)
 
             # remove our key's hash to the fk hash list
             # of the other data
-            self._remove_hash_from_other_data(obj_type,
-                                              v, other_data)
+            other_data = self._remove_hash_from_other_data(
+                                              obj_type,
+                                              value_data.get('_hash'),
+                                              other_data)
 
             # push the other data back
             other_data = self._serialize_value_data(other_data)
