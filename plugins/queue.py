@@ -363,82 +363,54 @@ class QueuePlugin(MemcachedPlugin):
         # remove it from it's current key
         self.delete_underhanded(current_path)
 
-    def handle_stats(self,queue_name):
+        # remove the out key, add the original key to tracking
+        self._key_deleted(current_path)
+        self._key_set(original_path)
+
+    def handle_stats(self,queue_name=None):
         """
         returns back stats about the queue
-        including the current messages
+        including the current messages.
+        If no queue is passed than data for
+        all queue's is returned
         """
 
-        # we have two types of messages, messages
-        # which are in the queue and messages which
-        # are out and waiting to be deleted. for now
-        # we'll just return those in the queue
+        in_messages = 0
+        out_messages = 0
 
-        messages = []
-
-        # we want to go through the keys in the order
-        # they'd be returned by gets
-        keys = {}
-        out_keys = []
+        # go through all our keys
         for key in self.used_keys:
             name, args = self.parse_key(key)
-            # we don't care if it's not from the
-            # queue we are looking @
-            if name == queue_name:
-                if args and args[0] == 'out':
-                    # if it's out take note
-                    out_keys.append(args[0])
+
+            # if there is a queue name defined
+            # than limit the keys to that queue
+            if not queue_name or name == queue_name:
+
+                # grab the data for the key
+                msg = self.get_underhanded(key)
+
+                # if there's no data .. go on
+                if not msg:
+                    continue
+
+                # write back our response for this key
+                # the response key will either be the number (in)
+                # or hash (if out)
+                is_out = True if args and args[0] == 'out' else False
+                response_key = args[1] if is_out else args[0]
+                self.write_line('STAT %s/%s %s' % (name,
+                                                   response_key,
+                                                   msg))
+
+                # increment our msg counters
+                if is_out:
+                    out_messages += 1
                 else:
-                    keys[int(args[0])] = key
+                    in_messages += 1
 
-        # order our keys
-        ordered_indexes = sorted(keys.keys())
-        ordered_keys = [keys[i] for i in ordered_indexes]
-        del ordered_indexes
 
-        # go through our now ordered keys pulling their data
-        for key in ordered_keys:
-            # pull the message's data
-            msg = self.get_underhanded(key)
-
-            if msg:
-                # add to our list
-                messages.append(msg)
-
-        # grab our out messages
-        out_messages = []
-        for key in out_keys:
-            msg = self.get_underhanded(key)
-            if msg:
-                out_messages.append(msg)
-        del out_keys
-
-        # return our encoded list of messages
-        # and w/e other data we want to return
-        to_return = {
-            'queued_messages':messages,
-            'out_messages':out_messages,
-            'up_time':None,
-            'message_count':len(messages) + len(out_messages)
-        }
-
-        # go through all the things we are returning
-        # sending them one line at a time
-        for k,v in to_return.iteritems():
-            # no use sending nothing
-            if v is None:
-                continue
-
-            # one line per response
-            if type(v) in (list,tuple):
-                # if the response is multi line
-                # put an index # at the end of the state
-                # type name
-                for i,sub_v in enumerate(v):
-                    self.write_line('STAT %s_%s %s' % (k,i,sub_v))
-
-            else:
-                self.write_line('STAT %s %s' % (k,v))
+        # HERE we'd output other stats, for now
+        # just the messages are good enough
         
         # and we're done
         self.write_line('END')
