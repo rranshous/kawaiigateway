@@ -15,6 +15,11 @@ from collections import namedtuple
 
 import hashlib
 
+try:
+    import json
+except ImportException:
+    import jsonify as json
+
 # simple way of keeping message info
 Message = namedtuple('Message',['key','message','callback_token',
                                 'temporary_key'])
@@ -120,12 +125,25 @@ class QueuePlugin(MemcachedPlugin):
 
     def _set_data(self, key, value):
         """ adds a message to the queue """
+
+        # parse our key's info
         name, args = self.parse_key(key)
 
         logging.debug('wants me to set data: %s' % key)
 
-        # you talkin to me?
-        if not name: return False
+        # if it's an 'out' sub name space than
+        # we are re-adding in a currently 'out' message
+        # aka one which should be re-added at some point
+        # if we get one of those and it doesn't already
+        # exist setup the data and the timed handler
+        if args and args[0] == 'out':
+            logging.debug('handling already out key')
+
+            # no one else need touch this one
+            self.server.skip_other_handlers = True
+
+            # and we are done
+            return self._set_out_data(key, value)
 
         # if it is a head request ignore it
         if args and args[0] in self.ignored_sub_namespaces:
@@ -133,14 +151,11 @@ class QueuePlugin(MemcachedPlugin):
             return False
 
         # if we have args than we must be
-        # backloading from the disk or something
-        # let it hit our key tracking but don't act on it
-        # still don't track head's
+        # doing something other than a normal set
         if args:
             logging.debug('super n stop: %s' % key)
             super(QueuePlugin,self)._set_data(key,value)
             return False
-
 
         logging.debug('_set_data: %s %s' % (name,args))
 
@@ -160,6 +175,35 @@ class QueuePlugin(MemcachedPlugin):
 
         # show some respect to ur elders
         super(QueuePlugin,self)._set_data(new_key,value)
+
+        return True
+
+    def _set_out_data(self, key, value):
+        # this method ends up losing the original
+        # key and instead setting up a new 'out'
+        # and 'in' keys
+
+        # what if we get a set for an 'out' message?
+        # such as from disk backfill
+        name, args = self.parse_key(key)
+
+        # see if we already exist
+        if key in self.used_keys:
+            return False
+
+        # ok so we are adding it, but we dont know it's
+        # original key so we don't know where it goes once
+        # it's been re-added. lets add it to the end for now
+        # TODO not just add to the end
+        next_head = self._get_next_head(name)
+
+        # set our msg @ the new head
+        new_key = '%s/%s/%s' % (self.NS,name,next_head)
+        self.set_underhanded(new_key,value)
+
+        # now that it's set add our delete handler
+        # for it as though it was immediately "got"
+        self.add_delete_watcher(new_key,value,self.default_timeout)
 
         return True
 
@@ -214,11 +258,6 @@ class QueuePlugin(MemcachedPlugin):
             will go back to the front of the queue """
 
         name, args = self.parse_key(key)
-
-        # for us?
-        if not name:
-            logging.debug('not for us')
-            return None
 
         # get the next key
         key = self.get_next_key()
@@ -287,8 +326,13 @@ class QueuePlugin(MemcachedPlugin):
         for k in self.used_keys:
             name, args = self.parse_key(k)
             if name:
+                # make sure it's not 'out' or something
+                if args and args[0] in self.ignored_sub_namespaces:
+                    continue
+
                 # grab it's #
                 numbers.append(int(args[0]))
+
                 # add it to our key lookup
                 NS_keys[numbers[-1]] = k
 
@@ -319,38 +363,87 @@ class QueuePlugin(MemcachedPlugin):
         # remove it from it's current key
         self.delete_underhanded(current_path)
 
-    def _get_stats(self):
+    def handle_stats(self,queue_name):
         """
-        returns back stat's about all the queues
+        returns back stats about the queue
+        including the current messages
         """
 
-        # for each queue we want to return
-        # the number of messages
-        stats = []
+        # we have two types of messages, messages
+        # which are in the queue and messages which
+        # are out and waiting to be deleted. for now
+        # we'll just return those in the queue
 
-        # first figure out all the queue's we have
-        names = set()
-        counts = {}
+        messages = []
+
+        # we want to go through the keys in the order
+        # they'd be returned by gets
+        keys = {}
+        out_keys = []
         for key in self.used_keys:
-            name, args = self._parse_key(key)
-            if name:
-                names.add(name)
-                if name not in counts:
-                    counts[name] = 1
+            name, args = self.parse_key(key)
+            # we don't care if it's not from the
+            # queue we are looking @
+            if name == queue_name:
+                if args and args[0] == 'out':
+                    # if it's out take note
+                    out_keys.append(args[0])
                 else:
-                    counts[name] += 1
+                    keys[int(args[0])] = key
 
-        # now that we have all the queue names
-        # and their counts return back our data
-        # TODO: more
-        pass
+        # order our keys
+        ordered_indexes = sorted(keys.keys())
+        ordered_keys = [keys[i] for i in ordered_indexes]
+        del ordered_indexes
 
-    def _get_all_messages(self,name):
-        """
-        shortcut for doing a gets against
-        every message
-        """
-        pass
+        # go through our now ordered keys pulling their data
+        for key in ordered_keys:
+            # pull the message's data
+            msg = self.get_underhanded(key)
+
+            if msg:
+                # add to our list
+                messages.append(msg)
+
+        # grab our out messages
+        out_messages = []
+        for key in out_keys:
+            msg = self.get_underhanded(key)
+            if msg:
+                out_messages.append(msg)
+        del out_keys
+
+        # return our encoded list of messages
+        # and w/e other data we want to return
+        to_return = {
+            'queued_messages':messages,
+            'out_messages':out_messages,
+            'up_time':None,
+            'message_count':len(messages) + len(out_messages)
+        }
+
+        # go through all the things we are returning
+        # sending them one line at a time
+        for k,v in to_return.iteritems():
+            # no use sending nothing
+            if v is None:
+                continue
+
+            # one line per response
+            if type(v) in (list,tuple):
+                # if the response is multi line
+                # put an index # at the end of the state
+                # type name
+                for i,sub_v in enumerate(v):
+                    self.write_line('STAT %s_%s %s' % (k,i,sub_v))
+
+            else:
+                self.write_line('STAT %s %s' % (k,v))
+        
+        # and we're done
+        self.write_line('END')
+
+        return True
 
     def add_delete_watcher(self,key,m,timeout):
         """
@@ -400,7 +493,7 @@ class QueuePlugin(MemcachedPlugin):
         self.delete_underhanded(key)
 
         # remove the fact we are tracking it
-        self._delete_key(key)
+        self._key_deleted(key)
 
         # add we're done!
         return True
