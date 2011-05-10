@@ -260,7 +260,7 @@ class QueuePlugin(MemcachedPlugin):
         name, args = self.parse_key(key)
 
         # get the next key
-        key = self.get_next_key()
+        key = self.get_next_key(name)
 
         # if we didn't get a next key than there 
         # are no items to be had
@@ -317,15 +317,15 @@ class QueuePlugin(MemcachedPlugin):
         # give back the message body
         return m
 
-    def get_next_key(self):
+    def get_next_key(self,name):
         # TODO: make this not horribly terrible
 
         # sort our keys
         NS_keys = {}
         numbers = []
         for k in self.used_keys:
-            name, args = self.parse_key(k)
-            if name:
+            used_name, args = self.parse_key(k)
+            if used_name and used_name == name:
                 # make sure it's not 'out' or something
                 if args and args[0] in self.ignored_sub_namespaces:
                     continue
