@@ -257,6 +257,8 @@ class QueuePlugin(MemcachedPlugin):
             delete needs to be issued or the message
             will go back to the front of the queue """
 
+        logging.debug('got key: %s' % key)
+
         name, args = self.parse_key(key)
 
         # get the next key
@@ -346,8 +348,23 @@ class QueuePlugin(MemcachedPlugin):
         # return the full key path
         return NS_keys[numbers[0]]
 
+    def handle_delete(self, key, *args):
+        if self._is_key_set(key):
+            # updated for parent to use underhanded
+            data = self.get_underhanded(key)
+            self._delete_data(key)
+            # we don't care if someone else already
+            # said not found
+            self.response = []
+            self.write_distinct_line('DELETED')
+            self.server.fire('memcached_delete',key,data)
+        else:
+            self.write_distinct_line('NOT_FOUND')
+
+
     def handle_not_deleted(self,original_path,current_path):
         """
+
         Uses the hash of the message to remove the message
         from limbo and add it to the begiing of the queue
         """
