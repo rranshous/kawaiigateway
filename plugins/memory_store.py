@@ -18,10 +18,6 @@ class LoggingDict(dict):
 
 class MemoryStore(object):
     memory_store = {}
-    cmdline_options = [
-        (('memory_limit',),{'help':'MB caching max, -1 = no limit',
-                            'default':100,'type':int})
-    ]
     def __init__(self,memory_limit=None):
 
         # sum of value sizes, bytes
@@ -67,6 +63,10 @@ class MemoryStore(object):
 
 class MemoryMemcachedPlugin(MemcachedPlugin,MemoryStore):
     memory_store = {}
+    cmdline_options = [
+        (('memory_limit',),{'help':'MB caching max, -1 = no limit',
+                            'default':100,'type':int})
+    ]
 
     def __init__(self,*args,**kwargs):
         # i think i can't use super here .. ?
