@@ -1,36 +1,19 @@
 from base import Plugin
 from memcached_plugin import MemcachedPlugin
+from ordered_dict import OrderedDict
 import logging
 
-class LoggingDict(dict):
-    """ We log the order theys were added """
-    def __init__(self,*args,**kwargs):
-        super(LoggingDict,self).__init__(*args,**kwargs)
-        self.key_list = []
-
-    def __setitem__(self,k,*args,**kwargs):
-        self.key_list.append(k)
-        return super(LoggingDict,self).__setitem__(k,*args,**kwargs)
-
-    def __delitem__(self,k,*args,**kwargs):
-        self.key_list.remove(k)
-        return super(LoggingDict,self).__delitem__(k,*args,**kwargs)
-
 class MemoryStore(object):
-    memory_store = {}
+    memory_store = OrderedDict()
     def __init__(self,memory_limit=None):
 
         # sum of value sizes, bytes
-        self.memory_usage = 0.0
-
-        # lookup of the len of the values in memory
-        self.value_sizes = LoggingDict()
+        self.memory_usage = 0
 
         # limit of memory pool values. passed in as MB
         # but stored as bytes to compare against the usage
         self.memory_limit = memory_limit * 1048576 if memory_limit else -1
-        if self.memory_limit != -1:
-            logging.debug('memory_limit: %s' % self.memory_limit)
+        logging.debug('memory_limit: %s' % self.memory_limit)
 
     def cull_pool(self):
         """ if we are over the memory limit remove
@@ -48,13 +31,10 @@ class MemoryStore(object):
             memory_limit = self.memory_limit - (.1 * self.memory_limit)
             removed = []
             while self.memory_usage > memory_limit:
-                oldest_key = self.value_sizes.key_list[0]
-                # remove it's size from the memory usage
-                self.memory_usage -= self.value_sizes.get(oldest_key)
-                # remove the key from the memory store
+                assert len(self.memory_store), 'WTF, memory store len == 0'
+                oldest_key = self.memory_store.iterkeys().next()
+                self.memory_usage -= len(self.memory_store[oldest_key])
                 del self.memory_store[oldest_key]
-                # now remove it from the value sizes
-                del self.value_sizes[oldest_key]
                 removed.append(oldest_key)
             logging.debug('culled: %s' % ','.join(removed))
             return True
@@ -76,8 +56,7 @@ class MemoryMemcachedPlugin(MemcachedPlugin,MemoryStore):
     def _set_data(self, key, value):
         super(MemoryMemcachedPlugin,self)._set_data(key,value)
         self.memory_store[key] = value
-        self.value_sizes[key] = float(len(value))
-        self.memory_usage += self.value_sizes[key]
+        self.memory_usage += len(value)
 
         # not sure yet when i want to cull the memory pool,
         # lets try doing it every set?
@@ -93,8 +72,7 @@ class MemoryMemcachedPlugin(MemcachedPlugin,MemoryStore):
     def _delete_data(self, key):
         super(MemoryMemcachedPlugin,self)._delete_data(key)
         try:
-            self.memory_usage -= self.value_sizes[key]
-            del self.value_sizes[key]
+            self.memory_usage -= len(self.memory_store[key])
             del self.memory_store[key]
         except KeyError:
             pass # not there =/
